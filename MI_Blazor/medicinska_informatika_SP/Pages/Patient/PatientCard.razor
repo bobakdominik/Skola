@@ -1,0 +1,284 @@
+﻿@page "/patientcard/{PatientID}"
+
+@using Data
+@using Oracle.ManagedDataAccess.Client
+@using System.Xml
+@using System.Data
+@using Radzen
+@using System.Xml.Linq
+@using Data.Models
+@using System.Drawing
+@using medicinska_informatika_SP.Data.Constants
+@inject PatientCardsService patientCardsService
+
+<div>
+    <RadzenCard>
+    <div>
+            <h4>@(PatientDetails["Meno"]!.InnerText + " " + PatientDetails["Priezvisko"]!.InnerText)</h4>
+    <div class="d-flex flex-row align-items-center">
+                <p>Rodné číslo: @PatientDetails.Attributes["RC"]!.Value</p>
+    <p style="margin: 0 10px"></p>
+                <p>Osobné číslo: @PatientDetails.Attributes["OC"]!.Value</p>
+    </div>
+    <div class="d-flex flex-row align-items-center">
+                <p>Číslo karty: @PatientDetails["Karta"]!.Attributes["ID_Karty"]!.Value &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</p>
+    <p style="margin: 0 10px"></p>
+                <p>Krvná skupina: @PatientDetails["Krvna_skupina"]!.InnerText</p>
+    </div>
+            <div style="margin: 5px 0">
+                <RadzenButton Style="width: 200; height: 50;" Click="@(() => LoadPatientData(PatientCardButtonType.ILLNESSES))">Choroby</RadzenButton>
+                <RadzenButton Style="width: 200; height: 50;" Click="@(() => LoadPatientData(PatientCardButtonType.VACCINATIONS))">Očkovania</RadzenButton>
+                <RadzenButton Style="width: 200; height: 50;" Click="@(() => LoadPatientData(PatientCardButtonType.MEDICAMENTS))">Lieky</RadzenButton>
+                <RadzenButton Style="width: 200; height: 50;" Click="@(() => LoadPatientData(PatientCardButtonType.OPERATIONS))">Lekárske úkony</RadzenButton>
+            </div>
+            <div style="visibility:@_visibilityConst[_addingRecord]; align-items: center; display:flex; ">
+                <RadzenDropDownDataGrid TValue="int" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" AllowFiltering="true" AllowClear="true"
+                                        Data=@(_addButtonDatas.Select(d => d.ID).AsQueryable())
+                                        Change=@(args => DropDownValChange(args)) Style="width: 200; height: 40;" />
+                <RadzenTextBox @bind-Value=@_textboxVal MaxLength="5" Style="width: 400; height: 40;" Disabled="true" />
+                <RadzenDatePicker Placeholder="Dátum od" TValue="DateTime?" DateFormat="dd.MM.yyyy" Change=@(args => DateChange(args, 1, "dd.MM.yyyy")) Style="width: 150; height: 40;" />
+                <RadzenDatePicker Placeholder="Dátum od" TValue="DateTime?" Min=@_dateFrom DateFormat="dd.MM.yyyy" Change=@(args => DateChange(args, 2, "dd.MM.yyyy")) Style="width: 150; height: 40;" />
+                <RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Style="width: 150; height: 40;" Text="Pridať" Click ="@AddRecord"/>
+                
+            </div>
+    @if (_buttonID == PatientCardButtonType.ILLNESSES)
+    {
+        if (@PatientDetails["Karta"]!["Choroby"]!.ChildNodes.Count == 0)
+        {
+                    <p>Pacient nemá žiadne choroby!</p>
+        }
+        else
+        {
+            foreach (XmlNode node in @PatientDetails["Karta"]!["Choroby"]!.ChildNodes)
+        {
+            <div class="d-flex flex-row align-items-center">
+                        <p>ID choroby: @node.Attributes["ID_Choroby"]!.Value &nbsp; &nbsp; &nbsp;</p>
+                        <p>Názov: @node["Nazov"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                        <p>Kód: @node["Kod"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+            </div>
+        }
+        }      
+    }
+    else if (_buttonID == PatientCardButtonType.VACCINATIONS)
+    {
+                    if
+                    (@PatientDetails["Karta"]!["Ockovania"]!.ChildNodes.Count == 0)
+        {
+                    <p>Pacient nemá žiadne očkovania!</p>
+        }
+        else
+        {
+                    foreach (XmlNode node in @PatientDetails["Karta"]!["Ockovania"]!.ChildNodes)
+                    {
+                        <div class="d-flex flex-row align-items-center">
+                            <p>ID vakcíny: @node.Attributes["ID_Vakciny"]!.Value &nbsp; &nbsp; &nbsp;</p>
+                            <p>Názov: @node["Nazov"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                            <p>Typ: @node["Typ"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                        </div>
+                    }
+        }
+                
+    }
+    else if (_buttonID == PatientCardButtonType.MEDICAMENTS)
+    {
+                if
+                (@PatientDetails["Karta"]!["Lieky"]!.ChildNodes.Count == 0)
+                {
+                    <p>Pacient nemá predpísané žiadne lieky!</p>
+                }
+                else
+                {
+                    foreach (XmlNode node in @PatientDetails["Karta"]!["Lieky"]!.ChildNodes)
+                    {
+                        <div class="d-flex flex-row align-items-center">
+                            <p>ID lieku: @node.Attributes["Kod_Lieku"]!.Value &nbsp; &nbsp; &nbsp;</p>
+                            <p>Dávkovanie: @node["Davkovanie"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                            <p>Dátum od: @node["Datum_od"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                        </div>
+                    }
+                }
+                
+    }
+    else if (_buttonID == PatientCardButtonType.OPERATIONS)
+    {
+                if
+                (@PatientDetails["Karta"]!["Lekarske_Ukony"]!.ChildNodes.Count == 0)
+                {
+                    <p>Pacient nemá vykonané žiadne lekárske úkony!</p>
+                }
+                else
+                {
+                    foreach (XmlNode node in @PatientDetails["Karta"]!["Lekarske_Ukony"]!.ChildNodes)
+                    {
+                        <div class="d-flex flex-row align-items-center">
+                            <p>ID úkonu: @node.Attributes["ID_Ukonu"]!.Value &nbsp; &nbsp; &nbsp;</p>
+                            <p>ID oddelenia: @node.Attributes["ID_Oddelenia"]!.Value &nbsp; &nbsp; &nbsp;</p>
+                            <p>Názov: @node["Nazov"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                            <p>Dátum vykonania: @node["Datum_Vykonania"]!.InnerText &nbsp; &nbsp; &nbsp;</p>
+                        </div>
+                    }
+                }
+                
+    }                
+    </div>
+    </RadzenCard>
+</div>
+
+
+@code {
+    [Parameter]
+    public string PatientID { get; set; }
+    DateTime? _dateFrom;
+    DateTime? _dateTo;
+
+    IEnumerable<Illness> _illnesses;
+    private IEnumerable<Vaccination> _vaccinations;
+
+    private XmlElement? PatientDetails { get; set; }
+    private PatientCardButtonType _buttonID = PatientCardButtonType.ILLNESSES;
+    private int _addingRecord = 1;
+    private string[] _visibilityConst = { "hidden", "visible" };
+    private List<AddButtonData> _addButtonDatas;
+    private string _textboxVal = "";
+    private AddButtonData? _selectedData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _illnesses = await patientCardsService.GetIllnessesAsync();
+        _vaccinations = await patientCardsService.GetVaccinationsAsync();
+        PatientID = PatientID.Replace("-", "/");
+        LoadData();
+    }
+
+    private void LoadData()
+    {
+        var cmd = new OracleCommand();
+        cmd.CommandType = CommandType.Text;
+        cmd.Connection = (OracleConnection)patientCardsService.GetDbConnection();
+        cmd.CommandText = $"select export_zdravotnych_kariet_podla_id('{PatientID}') from dual";
+        cmd.XmlCommandType = OracleXmlCommandType.Query;
+        cmd.BindByName = true;
+        cmd.XmlQueryProperties.MaxRows = -1;
+
+        XmlReader xmlReader = cmd.ExecuteXmlReader();
+        XmlDocument xmlDocument = new XmlDocument();
+
+        xmlDocument.PreserveWhitespace = true;
+        xmlDocument.Load(xmlReader);
+        var xmlNodeList = xmlDocument.GetElementsByTagName("XMLTYPE");
+        foreach (XmlNode node in xmlNodeList)
+        {
+            XmlElement childElement = node["Osoba"]!;
+            if (childElement.Attributes["RC"]!.Value == PatientID)
+            {
+                PatientDetails = childElement;
+            }
+        }
+        cmd.Dispose();
+        LoadAddRecordData();
+    }
+
+    private void LoadAddRecordData()
+    {
+        _textboxVal = "";
+        _addButtonDatas = new();
+        if (_buttonID == PatientCardButtonType.ILLNESSES)
+        {
+            foreach (var ilness in _illnesses)
+            {
+                _addButtonDatas.Add(new AddButtonData
+                    {
+                        ID = ilness.IllnessId,
+                        Description = ilness.IllnessName
+                    });
+            }
+        }
+        else if (_buttonID == PatientCardButtonType.VACCINATIONS)
+        {
+            foreach (var vac in _vaccinations)
+            {
+                _addButtonDatas.Add(new AddButtonData
+                    {
+                        ID = vac.VaccinationId,
+                        Description = vac.VaccinationName
+                    });
+            }
+        }
+    }
+
+    private void AddRecord()
+    {
+        if (_selectedData != null && _dateFrom != null &&
+            (_dateTo == null || _dateFrom <= _dateTo))
+        {
+            if (_buttonID == PatientCardButtonType.ILLNESSES)
+            {
+                IllnessList illList = new IllnessList
+                    {
+                        CardId = Int32.Parse(PatientDetails["Karta"]!.Attributes["ID_Karty"]!.Value),
+                        IllnessId = _selectedData?.ID ?? 0,
+                        DateFrom = _dateFrom ?? DateTime.Now,
+                        DateTo = _dateTo
+
+                    };
+                patientCardsService.AddIllnessListToDb(illList);
+            }
+            else if (_buttonID == PatientCardButtonType.VACCINATIONS)
+            {
+            
+                VaccinationList vacList = new VaccinationList { 
+                        CardId = Int32.Parse(PatientDetails["Karta"]!.Attributes["ID_Karty"]!.Value),
+                        VaccinationId = _selectedData?.ID?? 0,
+                        DateFrom = _dateFrom?? DateTime.Now,
+                        DateTo = _dateTo
+
+                    };
+                patientCardsService.AddVaccinationListToDb(vacList);
+
+            }
+            patientCardsService.SaveChangesToDb();
+        }
+        LoadData();
+    }
+
+    private void LoadPatientData(PatientCardButtonType buttonType)
+    {
+        _buttonID = buttonType;
+        switch (buttonType)
+        {
+            case PatientCardButtonType.ILLNESSES:
+            case PatientCardButtonType.VACCINATIONS:
+                _addingRecord = 1;
+                break;
+            default:
+                _addingRecord = 0;
+                break;
+        }
+        LoadAddRecordData();
+    }
+
+    private void DropDownValChange(object value)
+    {
+        _selectedData = _addButtonDatas.Where(d => d.ID == Int32.Parse(value.ToString())).First();
+        _textboxVal = _selectedData?.Description;
+    }
+
+    private void DateChange(DateTime? value, int type, string format)
+    {
+        if (type == 1)
+        {
+            _dateFrom = value;
+            _dateTo = null;
+        }
+        else if (type == 2)
+        {
+            _dateTo = value;
+        }
+    }
+
+    internal struct AddButtonData{
+        public int ID { get; set; }
+        public string Description { get; set; }
+    }
+}

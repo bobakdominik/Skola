@@ -1,0 +1,179 @@
+﻿@page "/warehouse-machines"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore;
+@inject WarehouseService WarehouseService
+
+<h3>Sklad prístrojov</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať prístroj" Click="@InsertRow" Disabled=@(machineToInsert != null || machineToUpdate != null) />
+<RadzenDataGrid @ref="machinesGrid"
+                AllowFiltering="true" 
+                AllowColumnResize="true" 
+                AllowAlternatingRows="false" 
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true" 
+                PageSize="15" 
+                AllowPaging="true" 
+                PagerHorizontalAlign="HorizontalAlign.Left" 
+                ShowPagingSummary="true" 
+                EditMode="DataGridEditMode.Single"
+                Data="@machines" 
+                TItem="Machine" 
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow" 
+                RowCreate="@OnCreateRow" 
+                Sort="@Reset" 
+                Page="@Reset" 
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="Machine" Property="MachineId" Title="Id" />
+        <RadzenDataGridColumn TItem="Machine" Property="Department.DepartmentName" Title="Názov oddelenia" >
+            <EditTemplate Context="machine">
+                <RadzenDropDown @bind-Value="machine.Department" Data="@machines" TextProperty="Department.DepartmentName" ValueProperty="Department" Style="width:100%; display: block;" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Machine" Property="MachineName" Title="Názov nástroja" >
+            <EditTemplate Context="machine">
+                <RadzenTextBox @bind-Value="machine.MachineName" Style="width:100%; display: block" Name="MachineName" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="MachineName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn >
+        <RadzenDataGridColumn TItem="Machine" Property="State" Title="Stav prístroja" >
+            <EditTemplate Context="machine">
+                <RadzenDropDown @bind-Value="machine.State" Data="@machines" TextProperty="State" ValueProperty="State" Style="width:100%; display: block;" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Machine" Property="Service" Title="Dátum servisu" >
+            <EditTemplate Context="machine">
+                <RadzenDatePicker @bind-Value="machine.Service" Style="width:100%" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Machine" Context="machine" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+                <Template Context="machine">
+                    <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(machine))" @onclick:stopPropagation="true">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(machine))"  @onclick:stopPropagation="true">
+                    </RadzenButton>
+                </Template>
+                <EditTemplate Context="machine">
+                    <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(machine))">
+                    </RadzenButton>
+                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(machine))">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(machine))">
+                    </RadzenButton>
+                </EditTemplate>
+            </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    RadzenDataGrid<Machine> machinesGrid;
+    IEnumerable<Machine> machines;
+
+    public enum States
+    {
+        Work = 'f',
+        NonWork = 'n',
+    }
+
+    void Reset()
+    {
+        machineToInsert = null;
+        machineToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        machines = await WarehouseService.GetMachines();
+    }
+
+    async Task EditRow(Machine machine)
+    {
+        machineToUpdate = machine;
+        await machinesGrid.EditRow(machine);
+    }
+
+    void OnUpdateRow(Machine machine)
+    {
+        if (machine == machineToInsert)
+        {
+            machineToInsert = null;
+        }
+
+        machineToUpdate = null;
+
+        WarehouseService.UpdateDbMachine(machine);
+        WarehouseService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(Machine machine)
+    {
+        await machinesGrid.UpdateRow(machine);
+    }
+
+    void CancelEdit(Machine machine)
+    {
+        if (machine == machineToInsert)
+        {
+            machineToInsert = null;
+        }
+
+        machineToUpdate = null;
+
+        machinesGrid.CancelEditRow(machine);
+
+        var machineEntry = WarehouseService.getEntryMachine(machine);
+        if (machineEntry.State == EntityState.Modified)
+        {
+            machineEntry.CurrentValues.SetValues(machineEntry.OriginalValues);
+            machineEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(Machine machine)
+    {
+        if (machine == machineToInsert)
+        {
+            machineToInsert = null;
+        }
+
+        if (machine == machineToUpdate)
+        {
+            machineToUpdate = null;
+        }
+
+        if (machines.Contains(machine))
+        {
+            WarehouseService.RemoveMachineFromDb(machine);
+
+            WarehouseService.SaveChangesToDb();
+
+            await machinesGrid.Reload();
+        }
+        else
+        {
+            machinesGrid.CancelEditRow(machine);
+            await machinesGrid.Reload();
+        }
+    }
+
+    Machine machineToInsert;
+    Machine machineToUpdate;
+
+    async Task InsertRow()
+    {
+        machineToInsert = new Machine();
+        machineToInsert.Department = new Department();
+        await machinesGrid.InsertRow(machineToInsert);
+    }
+
+    void OnCreateRow(Machine machine)
+    {
+        WarehouseService.AddMachineToDb(machine);
+        WarehouseService.SaveChangesToDb();
+    }
+}

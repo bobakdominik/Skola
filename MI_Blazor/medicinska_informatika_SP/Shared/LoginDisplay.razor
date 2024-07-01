@@ -1,0 +1,9 @@
+﻿<AuthorizeView>
+    <Authorized>
+        <a href="/Kalendar">Hello, @context.User.Identity.Name!</a>
+        <a href="/logout">Log out</a>
+    </Authorized>
+    <NotAuthorized>
+        <a href="/login">Log in</a>
+    </NotAuthorized>
+</AuthorizeView>

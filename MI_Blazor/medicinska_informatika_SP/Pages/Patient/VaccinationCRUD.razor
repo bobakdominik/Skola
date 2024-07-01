@@ -1,0 +1,164 @@
+﻿@page "/vaccination-list"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject PatientCardsService PatientCardsService
+
+<h3>Ockovania</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať ockovanie" Click="@InsertRow" Disabled=@(vaccinationToInsert != null || vaccinationToUpdate != null) />
+<RadzenDataGrid @ref="vaccinationsGrid"
+                AllowFiltering="true"
+                AllowColumnResize="true"
+                AllowAlternatingRows="false"
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true"
+                PageSize="15"
+                AllowPaging="true"
+                PagerHorizontalAlign="HorizontalAlign.Left"
+                ShowPagingSummary="true"
+                EditMode="DataGridEditMode.Single"
+                Data="@vaccinations"
+                TItem="Vaccination"
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow"
+                RowCreate="@OnCreateRow"
+                Sort="@Reset"
+                Page="@Reset"
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="Vaccination" Property="VaccinationId" Title="Id" />
+        <RadzenDataGridColumn TItem="Vaccination" Property="VaccinationName" Title="Názov choroby">
+            <EditTemplate Context="vaccination">
+                <RadzenTextBox @bind-Value="vaccination.VaccinationName" Style="width:100%; display: block" Name="VaccinationName" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="VaccinationName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Vaccination" Property="VaccinationType" Title="Typ ockovania">
+            <EditTemplate Context="vaccination">
+                <RadzenTextBox @bind-Value="vaccination.VaccinationType" Style="width:100%; display: block" Name="VaccinationType" />
+                <RadzenRequiredValidator Text="Typ je povinný." Component="VaccinationType" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Vaccination" Context="vaccination" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+            <Template Context="vaccination">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(vaccination))" @onclick:stopPropagation="true">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(vaccination))" @onclick:stopPropagation="true">
+                </RadzenButton>
+            </Template>
+            <EditTemplate Context="vaccination">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(vaccination))">
+                </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(vaccination))">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(vaccination))">
+                </RadzenButton>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+
+@code {
+    RadzenDataGrid<Vaccination> vaccinationsGrid;
+    IEnumerable<Vaccination> vaccinations;
+
+    void Reset()
+    {
+        vaccinationToInsert = null;
+        vaccinationToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        vaccinations = await PatientCardsService.GetVaccinationsAsync();
+    }
+
+    async Task EditRow(Vaccination vaccination)
+    {
+        vaccinationToUpdate = vaccination;
+        await vaccinationsGrid.EditRow(vaccination);
+    }
+
+    void OnUpdateRow(Vaccination vaccination)
+    {
+        if (vaccination == vaccinationToInsert)
+        {
+            vaccinationToInsert = null;
+        }
+
+        vaccinationToUpdate = null;
+
+        PatientCardsService.UpdateDbVaccination(vaccination);
+        PatientCardsService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(Vaccination vaccination)
+    {
+        await vaccinationsGrid.UpdateRow(vaccination);
+    }
+
+    void CancelEdit(Vaccination vaccination)
+    {
+        if (vaccination == vaccinationToInsert)
+        {
+            vaccinationToInsert = null;
+        }
+
+        vaccinationToUpdate = null;
+
+        vaccinationsGrid.CancelEditRow(vaccination);
+
+        var vaccinationEntry = PatientCardsService.getEntryVaccination(vaccination);
+        if (vaccinationEntry.State == EntityState.Modified)
+        {
+            vaccinationEntry.CurrentValues.SetValues(vaccinationEntry.OriginalValues);
+            vaccinationEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(Vaccination vaccination)
+    {
+        if (vaccination == vaccinationToInsert)
+        {
+            vaccinationToInsert = null;
+        }
+
+        if (vaccination == vaccinationToUpdate)
+        {
+            vaccinationToUpdate = null;
+        }
+
+        if (vaccinations.Contains(vaccination))
+        {
+            PatientCardsService.RemoveVaccinationFromDb(vaccination);
+
+            PatientCardsService.SaveChangesToDb();
+
+            await vaccinationsGrid.Reload();
+        }
+        else
+        {
+            vaccinationsGrid.CancelEditRow(vaccination);
+            await vaccinationsGrid.Reload();
+        }
+    }
+
+    Vaccination vaccinationToInsert;
+    Vaccination vaccinationToUpdate;
+
+    async Task InsertRow()
+    {
+        vaccinationToInsert = new Vaccination();
+        await vaccinationsGrid.InsertRow(vaccinationToInsert);
+    }
+
+    void OnCreateRow(Vaccination vaccination)
+    {
+        PatientCardsService.AddVaccinationToDb(vaccination);
+        PatientCardsService.SaveChangesToDb();
+    }
+}

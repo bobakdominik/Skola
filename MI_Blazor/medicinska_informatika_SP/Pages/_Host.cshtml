@@ -1,0 +1,10 @@
+﻿@page "/Host"
+@namespace medicinska_informatika_SP.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+}
+<link rel="stylesheet" href="_content/Radzen.Blazor/css/material-base.css">
+<script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+<script src="saveFile.js"></script>
+<component type="typeof(App)" render-mode="Server" />

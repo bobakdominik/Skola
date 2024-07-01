@@ -1,0 +1,169 @@
+﻿@page "/warehouse-instruments"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore;
+@inject WarehouseService WarehouseService
+
+
+<h3>Sklad nástrojov</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať nástroj" Click="@InsertRow" Disabled=@(instrumentToInsert != null || instrumentToUpdate != null) />
+<RadzenDataGrid @ref="instrumentsGrid"
+                AllowFiltering="true" 
+                AllowColumnResize="true" 
+                AllowAlternatingRows="false" 
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true" 
+                PageSize="15" 
+                AllowPaging="true" 
+                PagerHorizontalAlign="HorizontalAlign.Left" 
+                ShowPagingSummary="true" 
+                EditMode="DataGridEditMode.Single"
+                Data="@instruments" 
+                TItem="MedicalInstrument" 
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow" 
+                RowCreate="@OnCreateRow" 
+                Sort="@Reset" 
+                Page="@Reset" 
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="MedicalInstrument" Property="InstrumentId" Title="Id" />
+        <RadzenDataGridColumn TItem="MedicalInstrument" Property="Department.DepartmentName" Title="Názov oddelenia" >
+            <EditTemplate Context="instrument">
+                <RadzenDropDown @bind-Value="instrument.Department" Data="@instruments" TextProperty="Department.DepartmentName" ValueProperty="Department" Style="width:100%; display: block;" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="MedicalInstrument" Property="InstrumentName" Title="Názov nástroja" >
+            <EditTemplate Context="instrument">
+                <RadzenTextBox @bind-Value="instrument.InstrumentName" Style="width:100%; display: block" Name="InstrumentName" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="InstrumentName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn >
+        <RadzenDataGridColumn TItem="MedicalInstrument" Property="ServiceLife" Title="Životnosť" >
+            <EditTemplate Context="instrument">
+                <RadzenDatePicker @bind-Value="instrument.ServiceLife" Style="width:100%" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="MedicalInstrument" Context="instrument" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+                <Template Context="instrument">
+                    <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(instrument))" @onclick:stopPropagation="true">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(instrument))"  @onclick:stopPropagation="true">
+                    </RadzenButton>
+                </Template>
+                <EditTemplate Context="instrument">
+                    <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(instrument))">
+                    </RadzenButton>
+                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(instrument))">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(instrument))">
+                    </RadzenButton>
+                </EditTemplate>
+            </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    RadzenDataGrid<MedicalInstrument> instrumentsGrid;
+    IEnumerable<MedicalInstrument> instruments;
+
+    void Reset()
+    {
+        instrumentToInsert = null;
+        instrumentToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        instruments = await WarehouseService.GetMedicalInstruments();
+    }
+
+    async Task EditRow(MedicalInstrument instrument)
+    {
+        instrumentToUpdate = instrument;
+        await instrumentsGrid.EditRow(instrument);
+    }
+
+    void OnUpdateRow(MedicalInstrument instrument)
+    {
+        if (instrument == instrumentToInsert)
+        {
+            instrumentToInsert = null;
+        }
+
+        instrumentToUpdate = null;
+
+        WarehouseService.UpdateDb(instrument);
+        WarehouseService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(MedicalInstrument instrument)
+    {
+        await instrumentsGrid.UpdateRow(instrument);
+    }
+
+    void CancelEdit(MedicalInstrument instrument)
+    {
+        if (instrument == instrumentToInsert)
+        {
+            instrumentToInsert = null;
+        }
+
+        instrumentToUpdate = null;
+
+        instrumentsGrid.CancelEditRow(instrument);
+
+        var instrumentEntry = WarehouseService.getEntry(instrument);
+        if (instrumentEntry.State == EntityState.Modified)
+        {
+            instrumentEntry.CurrentValues.SetValues(instrumentEntry.OriginalValues);
+            instrumentEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(MedicalInstrument instrument)
+    {
+        if (instrument == instrumentToInsert)
+        {
+            instrumentToInsert = null;
+        }
+
+        if (instrument == instrumentToUpdate)
+        {
+            instrumentToUpdate = null;
+        }
+
+        if (instruments.Contains(instrument))
+        {
+            WarehouseService.RemoveFromDb(instrument);
+
+            WarehouseService.SaveChangesToDb();
+
+            await instrumentsGrid.Reload();
+        }
+        else
+        {
+            instrumentsGrid.CancelEditRow(instrument);
+            await instrumentsGrid.Reload();
+        }
+    }
+
+    MedicalInstrument instrumentToInsert;
+    MedicalInstrument instrumentToUpdate;
+
+    async Task InsertRow()
+    {
+        instrumentToInsert = new MedicalInstrument();
+        instrumentToInsert.Department = new Department();
+        await instrumentsGrid.InsertRow(instrumentToInsert);
+    }
+
+    void OnCreateRow(MedicalInstrument instrument)
+    {
+        WarehouseService.AddToDb(instrument);
+        WarehouseService.SaveChangesToDb();
+    }
+}

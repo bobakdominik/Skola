@@ -1,0 +1,182 @@
+﻿@page "/warehouse-medicaments"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject WarehouseService WarehouseService
+
+<h3>Sklad liekov</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať nástroj" Click="@InsertRow" Disabled=@(departmentsMedicamentWarehouseToInsert != null || departmentsMedicamentWarehouseToUpdate != null) />
+<RadzenDataGrid @ref="departmentsMedicamentWarehousesGrid"
+                AllowFiltering="true" 
+                AllowColumnResize="true" 
+                AllowAlternatingRows="false" 
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true" 
+                PageSize="15" 
+                AllowPaging="true" 
+                PagerHorizontalAlign="HorizontalAlign.Left" 
+                ShowPagingSummary="true" 
+                EditMode="DataGridEditMode.Single"
+                Data="@departmentsMedicamentWarehouses" 
+                TItem="DepartmentsMedicamentWarehouse" 
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow" 
+                RowCreate="@OnCreateRow" 
+                Sort="@Reset" 
+                Page="@Reset" 
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="WarehouseId" Title="Id" />
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="Department.DepartmentName" Title="Názov oddelenia" >
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenDropDown @bind-Value="departmentsMedicamentWarehouse.Department" Data="@departmentsMedicamentWarehouses" TextProperty="Department.DepartmentName" ValueProperty="Department" Style="width:100%; display: block;" />
+                <RadzenRequiredValidator Text="Názov oddelenia je povinný." Component="Department.DepartmentName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="Medicament.MedicamentName" Title="Názov lieku">
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenDropDown @bind-Value="departmentsMedicamentWarehouse.Medicament" Data="@departmentsMedicamentWarehouses" TextProperty="Medicament.MedicamentName" ValueProperty="Medicament" Style="width:100%; display: block;" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="Medicament.MedicamentName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="Quantity" Title="Množstvo">
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenNumeric @bind-Value="departmentsMedicamentWarehouse.Quantity" Style="width:100%" />
+                <RadzenRequiredValidator Text="Množstvo je povinné." Component="Quantity" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn >
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="MinimalQuantity" Title="Minimálne množstvo">
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenNumeric @bind-Value="departmentsMedicamentWarehouse.MinimalQuantity" Style="width:100%" />
+                <RadzenRequiredValidator Text="Minimálne množstvo je povinné." Component="MinimalQuantity" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn >
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Property="ExpirationDate" Title="Dátum expirácie">
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenDatePicker @bind-Value="departmentsMedicamentWarehouse.ExpirationDate" Style="width:100%" />
+                <RadzenRequiredValidator Text="Dátum expirácie je povinný." Component="ExpirationDate" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="DepartmentsMedicamentWarehouse" Context="departmentsMedicamentWarehouse" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+            <Template Context="departmentsMedicamentWarehouse">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(departmentsMedicamentWarehouse))" @onclick:stopPropagation="true">
+                    </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(departmentsMedicamentWarehouse))" @onclick:stopPropagation="true">
+                    </RadzenButton>
+                </Template>
+            <EditTemplate Context="departmentsMedicamentWarehouse">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(departmentsMedicamentWarehouse))">
+                    </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(departmentsMedicamentWarehouse))">
+                    </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(departmentsMedicamentWarehouse))">
+                    </RadzenButton>
+                </EditTemplate>
+            </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    RadzenDataGrid<DepartmentsMedicamentWarehouse> departmentsMedicamentWarehousesGrid;
+    IEnumerable<DepartmentsMedicamentWarehouse> departmentsMedicamentWarehouses;
+
+    void Reset()
+    {
+        departmentsMedicamentWarehouseToInsert = null;
+        departmentsMedicamentWarehouseToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        departmentsMedicamentWarehouses = await WarehouseService.GetDepartmentsMedicamentWarehouse();
+    }
+
+    async Task EditRow(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        departmentsMedicamentWarehouseToUpdate = departmentsMedicamentWarehouse;
+        await departmentsMedicamentWarehousesGrid.EditRow(departmentsMedicamentWarehouse);
+    }
+
+    void OnUpdateRow(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        if (departmentsMedicamentWarehouse == departmentsMedicamentWarehouseToInsert)
+        {
+            departmentsMedicamentWarehouseToInsert = null;
+        }
+
+        departmentsMedicamentWarehouseToUpdate = null;
+
+        WarehouseService.UpdateDbDepartmentsMedicamentWarehouse(departmentsMedicamentWarehouse);
+        WarehouseService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        await departmentsMedicamentWarehousesGrid.UpdateRow(departmentsMedicamentWarehouse);
+    }
+
+    void CancelEdit(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        if (departmentsMedicamentWarehouse == departmentsMedicamentWarehouseToInsert)
+        {
+            departmentsMedicamentWarehouseToInsert = null;
+        }
+
+        departmentsMedicamentWarehouseToUpdate = null;
+
+        departmentsMedicamentWarehousesGrid.CancelEditRow(departmentsMedicamentWarehouse);
+
+        var departmentsMedicamentWarehouseEntry = WarehouseService.getEntryDepartmentsMedicamentWarehouse(departmentsMedicamentWarehouse);
+        if (departmentsMedicamentWarehouseEntry.State == EntityState.Modified)
+        {
+            departmentsMedicamentWarehouseEntry.CurrentValues.SetValues(departmentsMedicamentWarehouseEntry.OriginalValues);
+            departmentsMedicamentWarehouseEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        if (departmentsMedicamentWarehouse == departmentsMedicamentWarehouseToInsert)
+        {
+            departmentsMedicamentWarehouseToInsert = null;
+        }
+
+        if (departmentsMedicamentWarehouse == departmentsMedicamentWarehouseToUpdate)
+        {
+            departmentsMedicamentWarehouseToUpdate = null;
+        }
+
+        if (departmentsMedicamentWarehouses.Contains(departmentsMedicamentWarehouse))
+        {
+            WarehouseService.RemoveDepartmentsMedicamentWarehouseFromDb(departmentsMedicamentWarehouse);
+
+            WarehouseService.SaveChangesToDb();
+
+            await departmentsMedicamentWarehousesGrid.Reload();
+        }
+        else
+        {
+            departmentsMedicamentWarehousesGrid.CancelEditRow(departmentsMedicamentWarehouse);
+            await departmentsMedicamentWarehousesGrid.Reload();
+        }
+    }
+
+    DepartmentsMedicamentWarehouse departmentsMedicamentWarehouseToInsert;
+    DepartmentsMedicamentWarehouse departmentsMedicamentWarehouseToUpdate;
+
+    async Task InsertRow()
+    {
+        departmentsMedicamentWarehouseToInsert = new DepartmentsMedicamentWarehouse();
+        departmentsMedicamentWarehouseToInsert.Medicament = new Medicament();
+        await departmentsMedicamentWarehousesGrid.InsertRow(departmentsMedicamentWarehouseToInsert);
+    }
+
+    void OnCreateRow(DepartmentsMedicamentWarehouse departmentsMedicamentWarehouse)
+    {
+        WarehouseService.AddDepartmentsMedicamentWarehouseToDb(departmentsMedicamentWarehouse);
+        WarehouseService.SaveChangesToDb();
+    }
+}

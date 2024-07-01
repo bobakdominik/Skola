@@ -1,0 +1,240 @@
+﻿@page "/pdsoutputs"
+@using Oracle.ManagedDataAccess.Client
+@using Radzen
+@using System.Data
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using System.Linq.Dynamic.Core
+@inject PDSOutputsService pdsOutputService
+
+<h3>Výstupy</h3>
+<div>
+    <div>
+        <div style="align-items: stretch; justify-content: space-between; display:flex; margin: 10pt 0pt;">
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(0))">@_buttonNames[0]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(1))">@_buttonNames[1]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(2))">@_buttonNames[2]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(3))">@_buttonNames[3]</RadzenButton>
+        </div>
+        <div style="align-items: stretch; justify-content: space-between; display:flex; margin: 10pt 0pt;">
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(4))">@_buttonNames[4]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65" Click="@(arggs => ChooseFilter(5))">@_buttonNames[5]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(6))">@_buttonNames[6]</RadzenButton>
+            <RadzenButton Style="width: 24%; height: 65;" Click="@(arggs => ChooseFilter(7))">@_buttonNames[7]</RadzenButton>
+        </div>
+    </div>
+    <div>
+        <RadzenCard>
+            <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">@_filterDescriptions[_filterId]</RadzenText>
+            <div class="align-items-center list-group-horizontal" style="margin: 5pt 0pt;">
+                <RadzenTextBox Placeholder="@_textboxPlaceholder" @bind-Value=@_textboxVal Class="w-25" Visible=@_hasParameters />
+                <RadzenTextBox Placeholder="@_textboxPlaceholder2" @bind-Value=@_textboxVal2 Class="w-25" Visible=@_hasMoreParameters />
+                <RadzenTextBox Placeholder="@_textboxPlaceholder3" @bind-Value=@_textboxVal3 Class="w-25" Visible=@_hasMoreParameters />
+            </div>
+            <div class="align-items-center" style="align-items:center">
+                <RadzenButton Style="vertical-align:middle" Click=@(args => SetOracleParameter()) Visible=@_hasParameters>Filtrovať</RadzenButton>
+                <RadzenCheckBox Style="vertical-align:middle" @bind-Value=@_checkboxvValue TValue="bool" Change=@SetOracleParameter Visible=@_hasCheckbox />
+                <RadzenLabel Text=@_checkboxDescription Component="CheckBox1" Style="margin-left: 5px; vertical-align:middle" Visible=@_hasCheckbox />
+            </div>
+        </RadzenCard>
+         @if (_columns != null)
+         {
+            <RadzenDataGrid AllowPaging="true" PageSize="@(_loadedData.Count<15 ? _loadedData.Count: 15)" Data="@_loadedData" Count="@_loadedData.Count" TItem="IDictionary<string, object>">
+                <Columns>
+                    @foreach (var column in _columns)
+                    {
+                        <RadzenDataGridColumn TItem="IDictionary<string, object>"
+                                      Title="@column"
+                                      Property="@GetColumnPropertyExpression(column)">
+                            <Template>
+                                @context[column]
+                            </Template>
+                        </RadzenDataGridColumn>
+                    }
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </div>
+</div>
+
+@code {
+    private string _textboxVal = string.Empty;
+    private List<Dictionary<string, object>> _loadedData = new();
+    private readonly List<OracleParameter> _oracleParameters = new List<OracleParameter>();
+    private IEnumerable<dynamic>? _columns;
+    private int _filterId = 0;
+    private bool _hasParameters = false;
+    private bool _hasCheckbox = true;
+    private bool _checkboxvValue;
+    private string _textboxPlaceholder = string.Empty;
+    private string _checkboxDescription = string.Empty;
+
+    private bool _hasMoreParameters = false;
+    private string _textboxVal2 = string.Empty;
+    private string _textboxPlaceholder2 = string.Empty;
+    private string _textboxVal3 = string.Empty;
+    private string _textboxPlaceholder3 = string.Empty;
+
+    private readonly string[] _buttonNames = new string[]
+    {
+        "Smerťelné choroby",
+        "Obsadené lôžka",
+        "Podiel chorých osôb",
+        "Štatistika vyťaženosti",
+        "Suma platieb osoby",
+        "Pacienti s chorobou",
+        "Dĺžka choroby",
+        "Suma platieb nemocnice"
+    };
+    private readonly string[] _filterDescriptions = new string[]
+    {
+        "Zoznam osôb so smrteľnými chorobami",
+        "Zoznam obsadených lôžok podľa oddelenia",
+        "Podiel najviac chorých osôb",
+        "Štatistika najviac vyťažených mesiacov v roku",
+        "Suma platieb danej osoby",
+        "Počet pacientov s danou chorobou",
+        "Utriedený zoznam pacientov podľa dĺžky trvania danej choroby",
+        "Suma platieb danej nemocnice za určitý mesiac a rok"
+    };
+    private readonly string[] _procedureNames = new string[]
+    {
+        "osoby_so_smrtelnymi_chorobami",
+        "aktualny_pocet_obsadenych_lozok_podla_oddelenia",
+        "najviac_chorych_osob_podiel",
+        "najviac_vytazene_mesiace_statistika",
+        "suma_platieb_danej_osoby",
+        "pocet_pacientov_s_danou_chorobou",
+        "zoradenie_pacientov_podla_trvania_choroby",
+        "suma_platieb_danej_nemocnici_dany_rok_a_mesiac"
+    };
+
+    protected override void OnInitialized()
+    {
+        ChooseFilter(0);
+    }
+
+    private void ChooseFilter(int buttonID)
+    {
+        _filterId = buttonID;
+        _textboxVal = string.Empty;
+        _hasCheckbox = false;
+        _hasMoreParameters = false;
+        _textboxVal2 = string.Empty;
+        _textboxPlaceholder2 = string.Empty;
+        _textboxVal3 = string.Empty;
+        _textboxPlaceholder3 = string.Empty;
+        _checkboxDescription = string.Empty;
+        switch (buttonID)
+        {
+            case 2:
+                _hasParameters = true;
+                _textboxPlaceholder = "Percentá";
+                break;
+            case 3:
+                _hasParameters = true;
+                _textboxPlaceholder = "Rok";
+                break;
+            case 4:
+                _hasParameters = true;
+                _textboxPlaceholder = "Osobné číslo pacienta";
+                break;
+            case 5:
+                _hasParameters = true;
+                _textboxPlaceholder = "ID choroby";
+                break;
+            case 6:
+                _hasParameters = true;
+                _hasCheckbox = true;
+                _textboxPlaceholder = "ID choroby";
+                _checkboxDescription = "Zostupne";
+                break;
+            case 7:
+                _hasParameters = true;
+                _hasMoreParameters = true;
+                _textboxPlaceholder = "ID nemocnice";
+                _textboxPlaceholder2 = "Mesiac";
+                _textboxPlaceholder3 = "Rok";
+                break;
+            default:
+                _hasParameters = false;
+                break;
+        }
+        SetOracleParameter();
+    }
+
+    private void SetOracleParameter()
+    {
+        _oracleParameters.Clear();
+        int cislo;
+        switch (_filterId)
+        {
+            case 2:
+                _oracleParameters.Add(new OracleParameter("percenta", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : 100, ParameterDirection.Input));
+                break;
+            case 3:
+                _oracleParameters.Add(new OracleParameter("rok", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : 0, ParameterDirection.Input));
+                break;
+            case 4:
+                _oracleParameters.Add(new OracleParameter("os_cislo", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : 0, ParameterDirection.Input));
+                break;
+            case 5:
+                _oracleParameters.Add(new OracleParameter("p_id_choroby", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : 0, ParameterDirection.Input));
+                break;
+            case 6:
+                _oracleParameters.Add(new OracleParameter("zorad_vzostupne", OracleDbType.Boolean, !_checkboxvValue, ParameterDirection.Input));
+                _oracleParameters.Add(new OracleParameter("id_choroby", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : null, ParameterDirection.Input));
+                break;
+            case 7:
+                _oracleParameters.Add(new OracleParameter("nemocnica", OracleDbType.Int32, int.TryParse(_textboxVal, out cislo) ? cislo : 0, ParameterDirection.Input));
+                _oracleParameters.Add(new OracleParameter("mesiac", OracleDbType.Int32, int.TryParse(_textboxVal2, out cislo) ? cislo : null, ParameterDirection.Input));
+                _oracleParameters.Add(new OracleParameter("rok", OracleDbType.Int32, int.TryParse(_textboxVal3, out cislo) ? cislo : null, ParameterDirection.Input));
+                break;
+        }
+        var oraOutputPa = new OracleParameter();
+        oraOutputPa.OracleDbType = OracleDbType.RefCursor;
+        oraOutputPa.Direction = ParameterDirection.Output;
+        _oracleParameters.Add(oraOutputPa);
+        LoadData();
+    }
+
+    private void LoadData()
+    {
+        _columns = null;
+        _loadedData = new();
+        var cmd = new OracleCommand();
+        cmd.CommandType = CommandType.StoredProcedure;
+        cmd.Connection = (OracleConnection)pdsOutputService.GetDbConnection();
+        cmd.CommandText = _procedureNames[_filterId];
+        foreach (var param in _oracleParameters)
+        {
+            cmd.Parameters.Add(param);
+        }
+
+        using (var reader = cmd.ExecuteReader())
+        {
+            if (reader.Read())  // read the first one to get the columns collection
+            {
+                _columns = reader.GetSchemaTable().Rows.OfType<DataRow>().Select(r => r["ColumnName"]);
+                do
+                {
+                    dynamic row = new Dictionary<string, object>();
+
+                    foreach (string col in _columns)
+                    {
+                        row[col] = reader[col];
+                    }
+
+                    _loadedData.Add(row);
+                } while (reader.Read());
+            }
+        }
+        cmd.Dispose();
+    }
+
+    public string GetColumnPropertyExpression(string name)
+    {
+        var expression = $@"it[""{name}""].ToString()";
+        return expression;
+    }
+}

@@ -1,0 +1,188 @@
+﻿@page "/medicament-list"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject WarehouseService WarehouseService
+
+<h3>Zoznam liekov</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať liek" Click="@InsertRow" Disabled=@(medicamentToInsert != null || medicamentToUpdate != null) />
+<RadzenDataGrid @ref="medicamentsGrid"
+                AllowFiltering="true" 
+                AllowColumnResize="true" 
+                AllowAlternatingRows="false" 
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true" 
+                PageSize="15" 
+                AllowPaging="true" 
+                PagerHorizontalAlign="HorizontalAlign.Left" 
+                ShowPagingSummary="true" 
+                EditMode="DataGridEditMode.Single"
+                Data="@medicaments" 
+                TItem="Medicament" 
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow" 
+                RowCreate="@OnCreateRow" 
+                Sort="@Reset" 
+                Page="@Reset" 
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="Medicament" Property="MedicamentCode" Title="Kód lieku" />
+        <RadzenDataGridColumn TItem="Medicament" Property="Atc" Title="ATC" >
+            <EditTemplate Context="medicament">
+                <RadzenTextBox @bind-Value="medicament.Atc" Style="width:100%; display: block" Name="Atc" />
+                <RadzenRequiredValidator Text="Atc je povinné." Component="Atc" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn >
+        <RadzenDataGridColumn TItem="Medicament" Property="Prescription" Title="Predpis">
+            <EditTemplate Context="medicament">
+                <RadzenTextBox @bind-Value="medicament.Prescription" Style="width:100%; display: block" Name="Prescription" />
+                <RadzenRequiredValidator Text="Predpis je povinný." Component="Prescription" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Medicament" Property="MedicamentName" Title="Názov">
+            <EditTemplate Context="medicament">
+                <RadzenTextBox @bind-Value="medicament.MedicamentName" Style="width:100%; display: block" Name="MedicamentName" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="MedicamentName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Medicament" Property="Supplement" Title="Doplnok">
+            <EditTemplate Context="medicament">
+                <RadzenTextBox @bind-Value="medicament.Supplement" Style="width:100%; display: block" Name="Supplement" />
+                <RadzenRequiredValidator Text="Doplnok je povinný." Component="Supplement" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Medicament" Property="StandardDose" Title="Štandardná dávka lieku">
+            <EditTemplate Context="medicament">
+                <RadzenTextBox @bind-Value="medicament.StandardDose" Style="width:100%; display: block" Name="StandardDose" />
+                <RadzenRequiredValidator Text="Štandardná dávka lieku je povinná." Component="StandardDose" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Medicament" Property="Price" Title="Cena">
+            <EditTemplate Context="medicament">
+                <RadzenNumeric @bind-Value="medicament.Price" Style="width:100%" />
+                <RadzenRequiredValidator Text="Cena je povinná." Component="Price" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Medicament" Context="medicament" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+                <Template Context="medicament">
+                    <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(medicament))" @onclick:stopPropagation="true">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(medicament))"  @onclick:stopPropagation="true">
+                    </RadzenButton>
+                </Template>
+                <EditTemplate Context="medicament">
+                    <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(medicament))">
+                    </RadzenButton>
+                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(medicament))">
+                    </RadzenButton>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(medicament))">
+                    </RadzenButton>
+                </EditTemplate>
+            </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+
+@code {
+    RadzenDataGrid<Medicament> medicamentsGrid;
+    IEnumerable<Medicament> medicaments;
+
+    void Reset()
+    {
+        medicamentToInsert = null;
+        medicamentToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        medicaments = await WarehouseService.GetMedicaments();
+    }
+
+    async Task EditRow(Medicament medicament)
+    {
+        medicamentToUpdate = medicament;
+        await medicamentsGrid.EditRow(medicament);
+    }
+
+    void OnUpdateRow(Medicament medicament)
+    {
+        if (medicament == medicamentToInsert)
+        {
+            medicamentToInsert = null;
+        }
+
+        medicamentToUpdate = null;
+
+        WarehouseService.UpdateDbMedicament(medicament);
+        WarehouseService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(Medicament medicament)
+    {
+        await medicamentsGrid.UpdateRow(medicament);
+    }
+
+    void CancelEdit(Medicament medicament)
+    {
+        if (medicament == medicamentToInsert)
+        {
+            medicamentToInsert = null;
+        }
+
+        medicamentToUpdate = null;
+
+        medicamentsGrid.CancelEditRow(medicament);
+
+        var medicamentEntry = WarehouseService.getEntryMedicament(medicament);
+        if (medicamentEntry.State == EntityState.Modified)
+        {
+            medicamentEntry.CurrentValues.SetValues(medicamentEntry.OriginalValues);
+            medicamentEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(Medicament medicament)
+    {
+        if (medicament == medicamentToInsert)
+        {
+            medicamentToInsert = null;
+        }
+
+        if (medicament == medicamentToUpdate)
+        {
+            medicamentToUpdate = null;
+        }
+
+        if (medicaments.Contains(medicament))
+        {
+            WarehouseService.RemoveMedicamentFromDb(medicament);
+
+            WarehouseService.SaveChangesToDb();
+
+            await medicamentsGrid.Reload();
+        }
+        else
+        {
+            medicamentsGrid.CancelEditRow(medicament);
+            await medicamentsGrid.Reload();
+        }
+    }
+
+    Medicament medicamentToInsert;
+    Medicament medicamentToUpdate;
+
+    async Task InsertRow()
+    {
+        medicamentToInsert = new Medicament();
+        await medicamentsGrid.InsertRow(medicamentToInsert);
+    }
+
+    void OnCreateRow(Medicament medicament)
+    {
+        WarehouseService.AddMedicamentToDb(medicament);
+        WarehouseService.SaveChangesToDb();
+    }
+}

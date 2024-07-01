@@ -1,0 +1,73 @@
+﻿@page "/Kalendar"
+@using Oracle.ManagedDataAccess.Client;
+@using System.Data;
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Radzen
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Mvc
+
+@inject WarehouseService WarehouseService;
+@inject IEmployeService EmployeService;
+@inject SignInManager<Employee> manazeris;
+@inject NavigationManager NavManager
+<PageTitle>scheduler</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+    <RadzenScheduler style="height: 800px;" Data="@data" TItem="DataItem" StartProperty="Start" EndProperty="End" TextProperty="Text">
+        <Template Context="data">
+            <strong>@data.Text</strong>
+        </Template>
+        <ChildContent>
+            <RadzenMonthView/>
+            <RadzenWeekView/>
+        </ChildContent>
+    </RadzenScheduler>
+    </Authorized>
+</AuthorizeView>
+@code {
+
+    class DataItem
+    {
+        public DateTime Start { get; set; }
+        public DateTime End { get; set; }
+        public string Text { get; set; }
+    }
+
+    List<DataItem> data = new List<DataItem>();
+    private IEnumerable<Employee> employeesData;
+
+    private void getHolidays()
+    {
+        var cmd = new OracleCommand();
+        cmd.CommandType = CommandType.StoredProcedure;
+        cmd.Connection = (OracleConnection)WarehouseService.getDbConnection();
+
+        cmd.CommandText = "dovolenky";
+        var oraOutputPa = new OracleParameter();
+        oraOutputPa.OracleDbType = OracleDbType.RefCursor;
+        oraOutputPa.Direction = ParameterDirection.Output;
+        cmd.Parameters.Add(oraOutputPa);
+
+        OracleDataReader oraReader = null;
+        oraReader = cmd.ExecuteReader();
+
+
+        if (oraReader.HasRows)
+        {
+            while (oraReader.Read())
+            {
+                data.Add(new DataItem() { End = oraReader.GetDateTime(2), Start = oraReader.GetDateTime(1), Text = oraReader.GetString(0) });
+            }
+        }
+        oraOutputPa.Dispose();
+        cmd.Dispose();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        getHolidays();
+    }
+
+}

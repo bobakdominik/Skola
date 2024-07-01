@@ -1,0 +1,34 @@
+﻿@inherits LayoutComponentBase
+<AuthorizeView>
+    <Authorized>
+    <RadzenDialog/>
+    <RadzenNotification/>
+    <RadzenContextMenu/>
+    <RadzenTooltip/>
+
+    <PageTitle>medicinska_informatika_SP</PageTitle>
+
+
+    <div class="page">
+        <div class="sidebar">
+            <NavMenu/>
+        </div>
+
+        <main>
+            <div class="top-row px-4 auth">
+                <LoginDisplay/>
+                @* <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a> *@
+            </div>
+
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div>
+            <p>You dont have access to this site Please refresh the site</p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>

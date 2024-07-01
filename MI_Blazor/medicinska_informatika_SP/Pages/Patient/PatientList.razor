@@ -1,0 +1,187 @@
+﻿@page "/patientlist"
+@using Data
+@using Oracle.ManagedDataAccess.Client
+@using System.Xml
+@using System.Data
+@using Radzen
+@using System.Xml.Linq
+@using Data.Models
+@using System.Drawing
+
+@inject PatientCardsService patientCardsService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+
+@*
+    <div>
+    <div style="padding: 0 16px">
+        <RadzenButton Style="width: 120; height: 30;" Click="@ChangeSite">@_topButtonText</RadzenButton>
+    </div>
+    <RadzenDataList Visible="@(_displayImages)" AllowPaging="true" PageSize="@(_blobDatas.Count()<15 ? _blobDatas.Count(): 15)" Data="@_blobDatas" Count="@_blobDatas.Count()" TItem="BlobData">
+            <Template Context="blobData">
+                <RadzenCard>
+                    <div style="display:flex; justify-content: center">
+                    <RadzenImage Style="max-width: 50%;" Path="@($"data:image/png;base64, {Convert.ToBase64String(blobData.Data)}")"></RadzenImage>
+                    </div>
+                </RadzenCard>
+            </Template>
+        </RadzenDataList>
+        <RadzenDataList Visible="@(!_displayImages)" AllowPaging="true" PageSize="@(_patientCards.Count<15 ? _patientCards.Count: 15)" Data="@_patientCards" Count="@_patientCards.Count" TItem="IDictionary<string, PatientCard>">
+            <Template Context="card">
+                <RadzenCard>
+                    <div>
+                        <h4>@(card["Patient"].FirstName + " " + card["Patient"].LastName)</h4>
+                        <div class="d-flex flex-row align-items-center">
+                            <p>Rodné číslo: @card["Patient"].IdentificationNumber</p>
+                            <p style="margin: 0 10px"></p>
+                            <p>Osobné číslo: @card["Patient"].PatientId</p>
+                        </div>
+                        <div class="d-flex flex-row align-items-center">
+                            <p>Číslo karty: @card["Patient"].CardId</p>
+                            <p style="margin: 0 10px"></p>
+                            <p>Krvná skupina: @card["Patient"].BloodType</p>
+                        </div>
+                        <RadzenButton Style="width: 120; height: 30;" Click="@(arggs => ExportFile(card["Patient"].IdentificationNumber))">Export</RadzenButton>
+                    </div>
+                </RadzenCard>
+            </Template>
+        </RadzenDataList>
+        <RadzenPager ShowPagingSummary="true" PagingSummaryFormat="@pagingSummaryFormat" HorizontalAlign="HorizontalAlign.Right" Count="15" PageSize="15" PageNumbersCount="5" @*PageChanged="@PageChanged" *@@* />
+</div>
+*@
+
+<div>
+    <RadzenDataGrid AllowPaging="true" PageSize="15" Data="@_persons" Count="@count" TItem="Person" LoadData="@DisplayPersons">
+        <Columns>
+            <RadzenDataGridColumn TItem="Person" Property="IdentificationNumber" Title="Rodné číslo" />
+            <RadzenDataGridColumn TItem="Person" Property="Name" Title="Meno" />
+            <RadzenDataGridColumn TItem="Person" Property="Surname" Title="Priezvisko" />
+            <RadzenDataGridColumn TItem="Person" Property="PostCode" Title="PSČ" />
+            <RadzenDataGridColumn TItem="Person" Property="Street" Title="Ulica" />
+
+            <RadzenDataGridColumn Width="160px" TItem="Person" Property="IdentificationNumber" Title="Karta">
+                <Template Context="per">
+                    <RadzenButton ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" Class="m-1" Click=@(() => OpenCard(per.IdentificationNumber)) Text="Detail" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</div>
+
+
+
+@code{
+    private IEnumerable<BlobData> _blobDatas;
+    private IEnumerable<Document> _documents;
+    private IEnumerable<Person> _persons;
+
+    int count;
+
+    private string pagingSummaryFormat = "Displaying page {0} of {1} (total {2} records)";
+    private List<Dictionary<string, PatientCard>> _patientCards = new();
+    private Dictionary<string, XmlElement> _xmlNodes = new Dictionary<string, XmlElement>();
+    private bool _displayImages = false;
+    private string _topButtonText = "Obrázky";
+
+    protected override void OnInitialized()
+    {
+        //LoadData();
+        //LoadDataForBlobs();
+        //LoadDataForDocuments();
+    }
+
+
+    public void OpenCard(string fileKey)
+    {
+        NavManager.NavigateTo($"/patientcard/{fileKey.Replace("/", "-")}");
+    }
+
+    private void LoadData()
+    {
+        var cmd = new OracleCommand();
+        cmd.CommandType = CommandType.Text;
+        cmd.Connection = (OracleConnection)patientCardsService.GetDbConnection();
+        cmd.CommandText = "select export_zdravotnych_kariet() from dual";
+        cmd.XmlCommandType = OracleXmlCommandType.Query;
+        cmd.BindByName = true;
+        cmd.XmlQueryProperties.MaxRows = -1;
+
+        XmlReader xmlReader = cmd.ExecuteXmlReader();
+        XmlDocument xmlDocument = new XmlDocument();
+
+        xmlDocument.PreserveWhitespace = true;
+        xmlDocument.Load(xmlReader);
+        var xmlNodeList = xmlDocument.GetElementsByTagName("XMLTYPE");
+        FillCards(xmlNodeList);
+        cmd.Dispose();
+
+    }
+
+    private async void ExportFile(string fileKey)
+    {
+        var xml = _xmlNodes[fileKey];
+        var fileName = string.Format("Card_{0}.txt", fileKey.Split("/").Last());
+        var str = XDocument.Parse(xml.OuterXml).ToString();
+        await JSRuntime.InvokeAsync<object>("saveFile", fileName, str);
+    }
+
+    private void ChangeSite()
+    {
+        _displayImages = !_displayImages;
+        if (_displayImages)
+            _topButtonText = "Karty";
+        else
+            _topButtonText = "Obrázky";
+    }
+
+    async void LoadDataForBlobs()
+    {
+        var query = await patientCardsService.GetBlobDataAsync();
+        _blobDatas = query.ToList();
+    }
+
+    async void LoadDataForDocuments()
+    {
+        var query = await patientCardsService.GetDocumentAsync();
+        _documents = query.ToList();
+    }
+
+
+    private void FillCards(XmlNodeList xmlNodeList)
+    {
+        foreach (XmlNode node in xmlNodeList)
+        {
+            XmlElement childElement = node["Osoba"]!;
+            var card = new PatientCard
+                {
+                    FirstName = childElement["Meno"]!.InnerText,
+                    LastName = childElement["Priezvisko"]!.InnerText,
+                    IdentificationNumber = childElement.Attributes["RC"]!.Value,
+                    PatientId = childElement.Attributes["OC"]!.Value,
+                    BloodType = childElement["Krvna_skupina"]!.InnerText!,
+                    CardId = childElement["Karta"]!.Attributes["ID_Karty"]!.Value
+                };
+            dynamic row = new Dictionary<string, PatientCard>();
+            row["Patient"] = card;
+            _patientCards.Add(row);
+            _xmlNodes.Add(card.IdentificationNumber, childElement);
+        }
+    }
+
+    async void DisplayPersons(LoadDataArgs args)
+    {
+        var query = await patientCardsService.GetPersonsAsync();
+        count = query.Count();
+        _persons = query.Skip(args.Skip.Value).Take(args.Top.Value).ToList();
+    }
+
+    internal record PatientCard
+    {
+        public string FirstName{ get; set; }
+        public string LastName { get; set; }
+        public string IdentificationNumber{ get; set; }
+        public string PatientId { get; set; }
+        public string BloodType { get; set; }
+        public string CardId { get; set; }
+    }
+}

@@ -1,0 +1,164 @@
+﻿@page "/illness-list"
+@using Radzen
+@using medicinska_informatika_SP.Data
+@using medicinska_informatika_SP.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject PatientCardsService PatientCardsService
+
+<h3>Choroby</h3>
+
+<RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle_outline" Class="mt-2 mb-4" Text="Pridať chorobu" Click="@InsertRow" Disabled=@(illnessToInsert != null || illnessToUpdate != null) />
+<RadzenDataGrid @ref="illnessesGrid"
+                AllowFiltering="true"
+                AllowColumnResize="true"
+                AllowAlternatingRows="false"
+                FilterMode="FilterMode.Advanced"
+                AllowSorting="true"
+                PageSize="15"
+                AllowPaging="true"
+                PagerHorizontalAlign="HorizontalAlign.Left"
+                ShowPagingSummary="true"
+                EditMode="DataGridEditMode.Single"
+                Data="@illnesses"
+                TItem="Illness"
+                LogicalFilterOperator="LogicalFilterOperator.Or"
+                RowUpdate="@OnUpdateRow"
+                RowCreate="@OnCreateRow"
+                Sort="@Reset"
+                Page="@Reset"
+                Filter="@Reset">
+    <Columns>
+        <RadzenDataGridColumn TItem="Illness" Property="IllnessId" Title="Id" />
+        <RadzenDataGridColumn TItem="Illness" Property="IllnessName" Title="Názov choroby">
+            <EditTemplate Context="illness">
+                <RadzenTextBox @bind-Value="illness.IllnessName" Style="width:100%; display: block" Name="IllnessName" />
+                <RadzenRequiredValidator Text="Názov je povinný." Component="IllnessName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Illness" Property="IllnessCode" Title="Kod choroby">
+            <EditTemplate Context="illness">
+                <RadzenTextBox @bind-Value="illness.IllnessCode" Style="width:100%; display: block" Name="IllnessCode" />
+                <RadzenRequiredValidator Text="Kod je povinný." Component="IllnessCode" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn TItem="Illness" Context="illness" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="156px">
+            <Template Context="illness">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(illness))" @onclick:stopPropagation="true">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(illness))" @onclick:stopPropagation="true">
+                </RadzenButton>
+            </Template>
+            <EditTemplate Context="illness">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(illness))">
+                </RadzenButton>
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@((args) => CancelEdit(illness))">
+                </RadzenButton>
+                <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" Class="my-1 ms-1" Click="@(args => DeleteRow(illness))">
+                </RadzenButton>
+            </EditTemplate>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+
+@code {
+    RadzenDataGrid<Illness> illnessesGrid;
+    IEnumerable<Illness> illnesses;
+
+    void Reset()
+    {
+        illnessToInsert = null;
+        illnessToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        illnesses = await PatientCardsService.GetIllnessesAsync();
+    }
+
+    async Task EditRow(Illness illness)
+    {
+        illnessToUpdate = illness;
+        await illnessesGrid.EditRow(illness);
+    }
+
+    void OnUpdateRow(Illness illness)
+    {
+        if (illness == illnessToInsert)
+        {
+            illnessToInsert = null;
+        }
+
+        illnessToUpdate = null;
+
+        PatientCardsService.UpdateDbIllness(illness);
+        PatientCardsService.SaveChangesToDb();
+    }
+
+    async Task SaveRow(Illness illness)
+    {
+        await illnessesGrid.UpdateRow(illness);
+    }
+
+    void CancelEdit(Illness illness)
+    {
+        if (illness == illnessToInsert)
+        {
+            illnessToInsert = null;
+        }
+
+        illnessToUpdate = null;
+
+        illnessesGrid.CancelEditRow(illness);
+
+        var illnessEntry = PatientCardsService.getEntryIllness(illness);
+        if (illnessEntry.State == EntityState.Modified)
+        {
+            illnessEntry.CurrentValues.SetValues(illnessEntry.OriginalValues);
+            illnessEntry.State = EntityState.Unchanged;
+        }
+    }
+
+    async Task DeleteRow(Illness illness)
+    {
+        if (illness == illnessToInsert)
+        {
+            illnessToInsert = null;
+        }
+
+        if (illness == illnessToUpdate)
+        {
+            illnessToUpdate = null;
+        }
+
+        if (illnesses.Contains(illness))
+        {
+            PatientCardsService.RemoveIllnessFromDb(illness);
+
+            PatientCardsService.SaveChangesToDb();
+
+            await illnessesGrid.Reload();
+        }
+        else
+        {
+            illnessesGrid.CancelEditRow(illness);
+            await illnessesGrid.Reload();
+        }
+    }
+
+    Illness illnessToInsert;
+    Illness illnessToUpdate;
+
+    async Task InsertRow()
+    {
+        illnessToInsert = new Illness();
+        await illnessesGrid.InsertRow(illnessToInsert);
+    }
+
+    void OnCreateRow(Illness illness)
+    {
+        PatientCardsService.AddIllnessToDb(illness);
+        PatientCardsService.SaveChangesToDb();
+    }
+}
